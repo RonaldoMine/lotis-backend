@@ -1,38 +1,33 @@
 const express = require("express")
 const route = express.Router();
-const multer = require("multer")
 const query = require("../database/query");
 const isset = require("../helpers/isset");
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, 'public/uploads/files')
-    },
-    filename: function (req, file, cb) {
-        const uniqueSuffix = Date.now();
-        cb(null, file.fieldname + '-' + uniqueSuffix + file.originalname.replace(" ", "-"))
-    }
-})
-const upload = multer({
-    storage: storage,
-})
+const File = require("../models/file");
+const {upload, storeFile} = require("../helpers/storage");
 
 route.get('/:landId', async (req, res) => {
     const {landId} = req.params;
     const type = req.query.type;
     if (isset(landId) && isset(type)) {
-        const files = await query("Select * from files where land_id = ? and type = ?", [landId, type]);
+        const files = await File.findAll({where: {land_id: landId, type: type}});
         return res.send(files);
     }
     return res.sendStatus(400);
 })
 
-route.post("/store", upload.array('files'), async (req, res) => {
+route.post("/store/:landId", upload.array('files'), async (req, res) => {
     const files = req.files
+    const {landId} = req.params;
+    const {type} = req.body;
     if (isset(files)) {
         const user = req.user;
         files.map(async (file) => {
             await query('Insert into files(user_id, land_id, name, path, type) values(?,?,?,?,?)', [user.id, 1, file.originalname, file.path.replace("\\", "/"), "PICTURE"])
+            const pathFile = `pictures/${file.filename}`;
+            storeFile(file, pathFile);
+            await File.create({user_id: user.id, land_id: landId, name: file.originalname, path: pathFile, type: type})
         })
+
         return res.sendStatus(200)
 
     }
@@ -44,20 +39,16 @@ route.put("/update/:id", async (req, res) => {
     const ID = parseInt(req.params.id)
     const {name} = req.body
     if (isset(name)) {
-        const role = await query("Select * from roles where id = ?", [ID]);
-        if (role.length > 0) {
-            await query("Update roles set name=? where id = ?", [name, ID])
-            return res.sendStatus(200)
-        }
+
     }
     return res.sendStatus(400)
 })
 
 route.delete("/delete/:id", async (req, res) => {
     const ID = parseInt(req.params.id)
-    const role = await query("Select * from roles where id = ?", [ID]);
-    if (role.length > 0) {
-        await query("Delete from roles where id = ?", [ID])
+    const file = await File.findByPk(ID);
+    if (file) {
+        await file.destroy()
         return res.sendStatus(200)
     }
     return res.sendStatus(400)
