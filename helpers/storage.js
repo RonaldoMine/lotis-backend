@@ -10,9 +10,6 @@ const storage = () => {
         filename: function (req, file, cb) {
             const uniqueSuffix = Date.now();
             cb(null, uniqueSuffix + file.originalname.replace(" ", "-"))
-        },
-        limits: {
-            fieldSize: "10MB"
         }
     })
 }

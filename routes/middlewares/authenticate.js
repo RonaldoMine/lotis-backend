@@ -1,6 +1,6 @@
-const isset = require("../../helpers/isset");
 const jwt = require("jsonwebtoken");
-const query = require("../../database/query");
+const isset = require("../../helpers/isset");
+const User = require("../../models/user")
 
 function authenticate(req, res, next) {
     let authorizationHeader = req.headers["authorization"];
@@ -8,9 +8,10 @@ function authenticate(req, res, next) {
     const token = authorizationHeader.split(' ')[1];
     if (!isset(token)) return res.sendStatus(401);
     jwt.verify(token, process.env.TOKEN_SECRET, async (err, user) => {
-        const auth = await query("Select * from users where email = ?", [user?.email]);
-        if (err || auth.length === 0) return res.sendStatus(403)
-        req.user = user;
+        if (err || user === undefined) return res.sendStatus(403)
+        const auth = await User.findOne({where: {email: user?.email}});
+        if (!user) return res.sendStatus(403)
+        req.user = auth;
         next()
     })
 }

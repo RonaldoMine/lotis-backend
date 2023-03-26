@@ -1,6 +1,7 @@
 const express = require("express")
 const dotenv = require('dotenv');
 const cors = require('cors');
+const path = require("path");
 const app = express();
 const PORT = 3001
 
@@ -15,7 +16,12 @@ const rolesRoutes = require("./routes/roles");
 const landsRoutes = require("./routes/lands");
 const filesRoutes = require("./routes/files");
 const authenticate = require("./routes/middlewares/authenticate");
-const path = require("path");
+
+//Models
+const Role = require("./models/role");
+const User = require("./models/user");
+const File = require("./models/file");
+const Land = require("./models/land");
 
 //Modules
 app.use(cors());
@@ -30,14 +36,17 @@ app.use("/roles", authenticate, rolesRoutes)
 app.use("/lands", authenticate, landsRoutes)
 app.use("/files", authenticate, filesRoutes)
 
-app.listen(PORT, () => {
-    console.log(`🚀 App is listen at port ${PORT}`)
-    connection.connect((err) => {
-        if (err) {
-            console.log("Error during BD connection")
-        } else {
-            console.log("Successfully connection")
-        }
-    })
+app.listen(PORT, async () => {
+    console.log(` App is listen at port ${PORT}`)
+    try {
+        await connection.authenticate()
+        await Role.sync()
+        await User.sync()
+        await Land.sync()
+        await File.sync()
+        console.log("Successfully connection")
+    }catch (e) {
+        console.log("Error during BD connection", e)
+    }
     dotenv.config();
 })

@@ -1,7 +1,9 @@
 const express = require("express")
-const query = require("../database/query")
 const isset = require("../helpers/isset");
 const {upload, storeFile} = require("../helpers/storage");
+const Land = require("../models/land");
+const File = require("../models/file");
+const User = require("../models/user");
 const route = express.Router();
 
 const storeLandFile = (folder, files, landId, userId, type) => {
@@ -9,7 +11,7 @@ const storeLandFile = (folder, files, landId, userId, type) => {
         files.map(async (file) => {
             const pathFile = `${folder}/${file.filename}`;
             storeFile(file, pathFile);
-            await query('Insert into files(user_id, land_id, name, path, type) values(?,?,?,?,?)', [userId, landId, file.originalname, pathFile, type])
+            await File.create({user_id: userId, land_id: landId, name: file.originalname, path: pathFile, type: type})
         })
     }
 }
@@ -18,9 +20,9 @@ route.get('/', async (req, res) => {
     let {user} = req.query;
     let lands;
     if (isset(user)) {
-        lands = await query("Select * from lands where user_id=?", [user]);
+        lands = await Land.findAll({where: {user_id: user}});
     } else {
-        lands = await query("Select * from lands");
+        lands = await Land.findAll({include: User});
     }
     res.send(lands)
 })
@@ -33,10 +35,18 @@ route.post("/store", upload.fields([{name: "pictures"}, {name: "documents"}, {na
     const user = req.user;
     if (isset(town) && isset(district) && isset(localisation) && isset(referenceNumber) && isset(surface) && isset(mapCoordinates)) {
         try {
-            const land = await query('Insert into lands(town, district, localisation, reference_number, surface, map_coordinates, user_id) values(?,?,?,?,?,?,?,?)', [town, district, localisation, referenceNumber, surface, mapCoordinates, user.id])
-            storeLandFile("pictures", pictures, land.insertId, user.id, "PICTURE")
-            storeLandFile("documents", documents, land.insertId, user.id, "DOCUMENT")
-            storeLandFile("plans", plans, land.insertId, user.id, "PLAN")
+            const land = await Land.create({
+                town: town,
+                district: district,
+                localisation: localisation,
+                reference_number: referenceNumber,
+                surface: surface,
+                map_coordinates: mapCoordinates,
+                user_id: user.id
+            });
+            storeLandFile("pictures", pictures, land.id, user.id, "PICTURE")
+            storeLandFile("documents", documents, land.id, user.id, "DOCUMENT")
+            storeLandFile("plans", plans, land.id, user.id, "PLAN")
             return res.status(200).send()
         } catch (e) {
             return res.status(400).json(e)
@@ -49,15 +59,17 @@ route.put("/update/:id", async (req, res) => {
     const ID = parseInt(req.params.id)
     const {town, district, localisation, dimension, referenceNumber, surface, mapCoordinates} = req.body
     if (isset(town) && isset(district) && isset(localisation) && isset(dimension) && isset(referenceNumber) && isset(surface) && isset(mapCoordinates)) {
-        const land = await query("Select * from lands where id = ?", [ID]);
-        if (land.length > 0) {
-            try {
-                await query("Update lands set town=?, district=?, localisation=?,dimension=?,reference_number=?, surface=?, map_coordinates=? where id = ?",
-                    [town, district, localisation, dimension, referenceNumber, surface, mapCoordinates, ID])
-                return res.status(200).send()
-            } catch (e) {
-                console.log(e)
-            }
+        const land = await Land.findByPk(ID);
+        if (land) {
+            land.town = town;
+            land.district = district;
+            land.localisation = localisation;
+            land.dimension = dimension;
+            land.reference_number = referenceNumber;
+            land.surface = surface;
+            land.map_coordinates = mapCoordinates;
+            await land.save();
+            return res.status(200).send()
         }
     }
     return res.status(400).send()
@@ -65,9 +77,9 @@ route.put("/update/:id", async (req, res) => {
 
 route.delete("/delete/:id", async (req, res) => {
     const ID = parseInt(req.params.id)
-    const land = await query("Select * from lands where id = ?", [ID]);
-    if (land.length > 0) {
-        await query("Delete from lands where id = ?", [ID])
+    const land = await Land.findByPk(ID);
+    if (land) {
+        await land.destroy();
         return res.status(200).send()
     }
     return res.status(400).send()
